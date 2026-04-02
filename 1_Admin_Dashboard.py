@@ -101,14 +101,11 @@ COLUMNS = [
 
 @st.cache_data(ttl=10)
 def load_data():
-    if not DATA_FILE.exists():
+    sheet = get_sheet()
+    records = sheet.get_all_records()
+    if not records:
         return pd.DataFrame(columns=COLUMNS)
-    df = pd.read_csv(DATA_FILE)
-    for col in COLUMNS:
-        if col not in df.columns:
-            df[col] = ""
-    return df
-
+    return pd.DataFrame(records)
 # ── Sidebar ────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("<h2 style='font-family:Syne,sans-serif;color:white;margin-bottom:4px'>◈ NEXA Admin</h2>", unsafe_allow_html=True)
