@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 # ── Auth ───────────────────────────────────────────────────────
-ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "nexa2024")
+ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "@J2sdctx5vd")
 
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
