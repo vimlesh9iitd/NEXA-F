@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import uuid
 from datetime import datetime
-from pathlib import Path
-import os
+import gspread
+from google.oauth2.service_account import Credentials
 
 # ── Page config ────────────────────────────────────────────────
 st.set_page_config(
@@ -13,9 +13,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ── Data helpers ───────────────────────────────────────────────
-DATA_FILE = Path("data/responses.csv")
-
+# ── Google Sheets helpers ──────────────────────────────────────
 COLUMNS = [
     "id", "timestamp", "name", "email", "role", "usage_duration",
     "modules_used", "overall_rating", "ease_of_use", "satisfaction",
@@ -23,43 +21,48 @@ COLUMNS = [
     "message", "source",
 ]
 
-def ensure_data_file():
-    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if not DATA_FILE.exists():
-        pd.DataFrame(columns=COLUMNS).to_csv(DATA_FILE, index=False)
+SCOPE = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive",
+]
+
+def get_sheet():
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"], scopes=SCOPE
+    )
+    client = gspread.authorize(creds)
+    return client.open("NEXA_Responses").sheet1
 
 def save_response(data: dict):
-    ensure_data_file()
-    df = pd.DataFrame([data])
-    df.to_csv(DATA_FILE, mode="a", header=False, index=False)
+    try:
+        sheet = get_sheet()
+        # Agar sheet bilkul empty hai toh header row add karo
+        existing = sheet.get_all_values()
+        if not existing:
+            sheet.append_row(COLUMNS)
+        sheet.append_row([data.get(col, "") for col in COLUMNS])
+    except Exception as e:
+        st.error(f"❌ Response save nahi hua: {e}")
+        st.stop()
 
 # ── Custom CSS ─────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap');
 
-/* Global */
 html, body, [class*="css"] {
     font-family: 'DM Sans', sans-serif !important;
 }
 .stApp {
     background: linear-gradient(135deg, #080B18 0%, #0D1128 50%, #080B18 100%);
 }
-
-/* Hide default streamlit elements */
 #MainMenu, footer, header { visibility: hidden; }
 .block-container { padding-top: 2rem !important; max-width: 760px !important; }
-
-/* Top gradient bar */
 .top-bar {
     position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 999;
     background: linear-gradient(90deg, #7C6EF5, #00D4FF, #FF6B9D, #F5C842);
 }
-
-/* Header */
-.nexa-header {
-    text-align: center; padding: 20px 0 32px;
-}
+.nexa-header { text-align: center; padding: 20px 0 32px; }
 .nexa-badge {
     display: inline-block; background: rgba(124,110,245,0.12);
     border: 1px solid rgba(124,110,245,0.3); border-radius: 100px;
@@ -72,14 +75,8 @@ html, body, [class*="css"] {
     background: linear-gradient(135deg, #fff 40%, #00D4FF);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
-.nexa-sub {
-    color: #7A85AA; font-size: 15px; margin-top: 10px; line-height: 1.6;
-}
-
-/* Section headers */
-.sec-header {
-    display: flex; align-items: center; gap: 12px; margin: 28px 0 16px;
-}
+.nexa-sub { color: #7A85AA; font-size: 15px; margin-top: 10px; line-height: 1.6; }
+.sec-header { display: flex; align-items: center; gap: 12px; margin: 28px 0 16px; }
 .sec-num {
     width: 32px; height: 32px; border-radius: 8px; display: flex;
     align-items: center; justify-content: center;
@@ -89,15 +86,11 @@ html, body, [class*="css"] {
 .sec-title {
     font-family: 'Syne', sans-serif !important; font-size: 1.15rem; font-weight: 700; color: white;
 }
-
-/* Cards */
 .card {
     background: rgba(20,28,53,0.85); border: 1px solid rgba(124,110,245,0.18);
     border-radius: 18px; padding: 24px; margin-bottom: 16px;
     backdrop-filter: blur(10px);
 }
-
-/* Override Streamlit inputs */
 .stTextInput > div > div > input,
 .stTextArea > div > div > textarea,
 .stSelectbox > div > div > div {
@@ -112,16 +105,12 @@ html, body, [class*="css"] {
     border-color: #7C6EF5 !important;
     box-shadow: 0 0 0 3px rgba(124,110,245,0.15) !important;
 }
-
-/* Labels */
 .stTextInput label, .stTextArea label, .stSelectbox label,
 .stMultiSelect label, .stSlider label, .stRadio label {
     color: #7A85AA !important; font-size: 12px !important;
     text-transform: uppercase !important; letter-spacing: 1px !important;
     font-weight: 500 !important;
 }
-
-/* Radio buttons */
 .stRadio > div { gap: 8px !important; }
 .stRadio > div > label {
     background: rgba(8,11,24,0.6) !important;
@@ -135,8 +124,6 @@ html, body, [class*="css"] {
     background: rgba(124,110,245,0.15) !important;
     border-color: #7C6EF5 !important; color: white !important;
 }
-
-/* Multiselect */
 .stMultiSelect > div > div {
     background: rgba(8,11,24,0.9) !important;
     border: 1.5px solid rgba(255,255,255,0.08) !important;
@@ -146,13 +133,9 @@ html, body, [class*="css"] {
     background: rgba(124,110,245,0.2) !important;
     border-radius: 8px !important;
 }
-
-/* Slider */
 .stSlider > div > div > div > div {
     background: linear-gradient(90deg, #7C6EF5, #00D4FF) !important;
 }
-
-/* Buttons */
 .stButton > button {
     background: linear-gradient(135deg, #7C6EF5, #9B8AF7) !important;
     color: white !important; border: none !important;
@@ -166,8 +149,6 @@ html, body, [class*="css"] {
     transform: translateY(-2px) !important;
     box-shadow: 0 8px 28px rgba(124,110,245,0.5) !important;
 }
-
-/* Progress */
 .stProgress > div > div > div {
     background: linear-gradient(90deg, #7C6EF5, #00D4FF) !important;
     border-radius: 100px !important;
@@ -176,8 +157,6 @@ html, body, [class*="css"] {
     background: rgba(255,255,255,0.06) !important;
     border-radius: 100px !important;
 }
-
-/* Success box */
 .success-box {
     text-align: center; padding: 50px 30px;
     background: rgba(20,28,53,0.85); border: 1px solid rgba(46,204,113,0.3);
@@ -195,8 +174,6 @@ html, body, [class*="css"] {
     padding: 8px 20px; font-size: 12px; color: #7C6EF5;
     letter-spacing: 2px; font-family: monospace;
 }
-
-/* Divider */
 .nexa-divider {
     height: 1px; background: rgba(124,110,245,0.15); margin: 8px 0 20px;
 }
